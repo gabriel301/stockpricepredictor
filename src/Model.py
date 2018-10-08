@@ -6,6 +6,7 @@ from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error
 from sklearn.linear_model import LinearRegression,Ridge,HuberRegressor,Lasso,ElasticNet
@@ -28,7 +29,7 @@ class Model:
     #Performs grid search for the chosen model
     def fit_model(self,model,params,X, y):
 
-        timeSeriesSplitObj = TimeSeriesSplit(n_splits=10)
+        #timeSeriesSplitObj = TimeSeriesSplit(n_splits=10)
         #cv_sets = ShuffleSplit(n_splits = 10, test_size = 0.20, random_state = 0).get_n_splits(X.shape[0])
         #cv_sets = TimeSeriesSplit(n_splits=10).get_n_splits(X.shape[0])
         scoring_fnc = make_scorer(r2_score)
@@ -44,42 +45,60 @@ class Model:
         score = model.score(X_test,y_test)
         return score
 
-    def build_params(self):
+    def build_params(self,modelsToBuild=[]):
         models = {}
-        models['Linear'] = {'normalize': [True, False],'fit_intercept': [True, False],'n_jobs':[-1]}
-        models['Ridge'] = {'alpha': [0.01,0.02,0.0095,0.015], 'normalize': [True, False],'fit_intercept': [True, False], 'random_state':[0]}
-        models['Huber'] = {'alpha': [0.01,0.02,0.0095,0.015], 'epsilon': [1.1,1.35,1.5,1.75],'fit_intercept': [False]}
-        models['Lasso'] = {'alpha': [0.01,0.02,0.0095,0.015], 'normalize': [True, False],'fit_intercept': [True, False], 'random_state':[0],'selection':['cyclic','random']}
-        models['ElasticNet'] = {'alpha': [1.0,1.1, 1.5,1.75], 'normalize': [True, False],'fit_intercept': [True, False], 'random_state':[0],'selection':['cyclic','random'],'l1_ratio':[0.25,0.5,1]}
-        
+        if 'Linear' in modelsToBuild:
+            models['Linear'] = {'normalize': [True, False],'fit_intercept': [True, False],'n_jobs':[-1]}
+        if 'Ridge' in modelsToBuild:
+            models['Ridge'] = {'alpha': [0.01,0.02,0.0095,0.015], 'normalize': [True, False],'fit_intercept': [True, False], 'random_state':[0]}
+        if 'Huber' in modelsToBuild:
+            models['Huber'] = {'alpha': [0.01,0.02,0.0095,0.015], 'epsilon': [1.1,1.35,1.5,1.75],'fit_intercept': [False]}
+        if 'Lasso' in modelsToBuild:
+            models['Lasso'] = {'alpha': [0.01,0.02,0.0095,0.015], 'normalize': [True, False],'fit_intercept': [True, False], 'random_state':[0],'selection':['cyclic','random']}
+        if 'ElasticNet' in modelsToBuild:
+            models['ElasticNet'] = {'alpha': [1.0,1.1, 1.5,1.75], 'normalize': [True, False],'fit_intercept': [True, False], 'random_state':[0],'selection':['cyclic','random'],'l1_ratio':[0.25,0.5,1]}
+        if 'RandomForests' in modelsToBuild:
+            models['RandomForests']=  {'n_jobs':[-1],'n_estimators':[10,20,40],'oob_score':[True,False],'min_samples_leaf': [4,8,16],'random_state':[0],'max_features':['sqrt','log2',0.5],'max_depth':[16,32,64]}
         return models
 
-    def build_models(self,predict = False):
+    def build_models(self,predict = False,modelsToBuild=[]):
         models = {}
         if not predict:
-            models['Linear'] = LinearRegression()
-            models['Ridge'] = Ridge()
-            models['Huber'] = HuberRegressor()
-            models['Lasso'] = Lasso()
-            models['ElasticNet'] = ElasticNet()            
+            if 'Linear' in modelsToBuild:
+                models['Linear'] = LinearRegression()
+            if 'Ridge' in modelsToBuild:    
+                models['Ridge'] = Ridge()
+            if 'Huber' in modelsToBuild:
+                models['Huber'] = HuberRegressor()
+            if 'Lasso' in modelsToBuild:
+                models['Lasso'] = Lasso()
+            if 'ElasticNet' in modelsToBuild:
+                models['ElasticNet'] = ElasticNet()
+            if 'RandomForests' in modelsToBuild:
+                models['RandomForests'] =  RandomForestRegressor()           
         return models
 
     #Estimar o preço pra T+1 com base em T-N+1 (fazer um shift de um dia no dataframe)
     #Com esse dado, calcular os indicadores e fazer o processo novamente, movendo mais um dia pra frente no dataframe
     #Fazer isso até chegar no dia desejado
-    def GetBestEstimatorsShiftStrategy(self,df,recordsToPredict,outputfolder="",writeInFile=True):
+    def GetBestEstimatorsShiftStrategy(self,df,recordsToPredict,outputfolder="",writeInFile=True,removePriceVariations=True,modelsToTrain=[]):
         print "Days to Predict: {}".format(recordsToPredict)
-        models = self.build_models()
-        params = self.build_params()
+        models = self.build_models(False,modelsToTrain)
+        params = self.build_params(modelsToTrain)
         scores = {}
         metrics = {}
         featureColumns = list(df.columns.values)
-        dfMetrics = pd.DataFrame(columns=['Model','R2 Training Score','R2 Test Score','MSE Train Score','MSE Test Score','Max Relative Error Percentage','Min Relative Error Percentage','Mean Relative Error Percentage','Std Relative Error Percentage','Q1 Relative Error Percentage','Q2 Relative Error Percentage','Q3 Relative Error Percentage','IQR Relative Error Percentage','Params'])
+        dfMetrics = pd.DataFrame(columns=['Model','R2 Training Score','R2 Test Score','MSE Train Score','MSE Test Score','RMSE Train Score','RMSE Test Score','Max Relative Error Percentage','Min Relative Error Percentage','Mean Relative Error Percentage','Std Relative Error Percentage','Q1 Relative Error Percentage','Q2 Relative Error Percentage','Q3 Relative Error Percentage','IQR Relative Error Percentage','Params'])
         dfResult = pd.DataFrame(columns=['Date','Actual'])
         X_train, X_test, y_train, y_test = self.GetTrainPredictData(df.copy(),featureColumns,['Norm_Adjusted_Close'],0.8,recordsToPredict)
         dfResult['Actual'] = X_test['Adjusted_Close']
         dfResult['Date'] = X_test['Date']
-        featureColumns = featureColumns[11:]
+        ##Remove columns Norm_High, Norm_low and Norm_Adjusted_Price from features
+        if removePriceVariations==True:
+            featureColumns = featureColumns[11:]
+        else:
+            featureColumns = featureColumns[8:]
+
         X_train = X_train[featureColumns]
         X_test = X_test[featureColumns]
         for key in models:
@@ -98,6 +117,8 @@ class Model:
             metrics['R2 Test Score'] = b_estimator.score(X_test.values,y_test)
             metrics['MSE Train Score'] = mean_squared_error(y_train,b_estimator.predict(X_train.values))
             metrics['MSE Test Score'] = mean_squared_error(y_test,pred)
+            metrics['RMSE Train Score'] = np.sqrt(mean_squared_error(y_train,b_estimator.predict(X_train)))
+            metrics['RMSE Test Score'] = np.sqrt(mean_squared_error(y_test,pred))
             metrics['Params'] = str(params[key])
             metrics['Max Relative Error Percentage'] = dfResult[key + " Relative Error Percentage"].values.max()
             metrics['Min Relative Error Percentage'] = dfResult[key + " Relative Error Percentage"].values.min()
@@ -112,6 +133,8 @@ class Model:
             print "R2 Test Score {}".format(metrics['R2 Test Score'])
             print "MSE Train Score {}".format(metrics['MSE Train Score'])
             print "MSE Test Score {}".format(metrics['MSE Test Score'])
+            print "RMSE Train Score {}".format(metrics['RMSE Train Score'])
+            print "RMSE Test Score {}".format(metrics['RMSE Test Score'])
 
         if(writeInFile):
             Util().WriteDataFrame(dfResult,os.path.join(outputfolder,"Predictions",str(df["Ticker"][0])),str(df["Ticker"][0])+" "+str(recordsToPredict)+" days"+".csv")    
@@ -198,14 +221,15 @@ class Model:
         return reScaled[0]
 
 def main():
-    files = Util().GetFilesFromFolder('C:\Users\Augus\Desktop\Data\Indicators\Normalized','csv')
+    files = Util().GetFilesFromFolder('../Report/Data/Indicators/Normalized','csv')
     intervals = [1,7,15,30,60,120]
     for file in files:
         print "File: {}".format(file)
         df = pd.read_csv(file)
         for interval in intervals:
             #Model().GetBestEstimatorNexDayStrategy(df.copy(),interval,'C:\Users\Augus\Desktop\TesteDonwloader\Data\Predictions\Next Day Strategy')
-            Model().GetBestEstimatorsShiftStrategy(df.copy(),interval,'C:\Users\Augus\Desktop\Data\Only Normalized Indicators')
+            Model().GetBestEstimatorsShiftStrategy(df.copy(),interval,'../Report/Data/Indicators and Normalized Prices',True,False)
+            Model().GetBestEstimatorsShiftStrategy(df.copy(),interval,'../Report/Data/Only Normalized Indicators',True,True)
             
 
 

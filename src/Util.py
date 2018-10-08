@@ -33,6 +33,9 @@ class Util:
     def CreateFolder(self,path):
         if not os.path.exists(path):
             os.makedirs(path)
+    
+    def FolderExists(self,path):
+        return os.path.exists(path)
 
     def FilterDataFrameByDate(self,df,startdate,enddate):      
         if 'Date' in df.columns:
@@ -69,7 +72,7 @@ class Util:
         df.to_csv(outputPath,index=include_index)
         print "File Created at {}".format(outputPath)
 
-    def Normalize(self, df, columnNames, start = 0, end = 1):
+    def Normalize(self, df, columnNames, start = 0, end = 1):              
         scale = MinMaxScaler(feature_range=(start, end))
         scaled = scale.fit_transform(df)
         #dict = {'scale': scale.scale_}

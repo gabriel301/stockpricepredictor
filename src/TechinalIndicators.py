@@ -123,8 +123,8 @@ class TechnicalIndicators:
         return dfResult
 
 def main():
-    inputFolder = "C:\Users\Augus\Desktop\TesteDonwloader\Data\Historical\Quotes\Normalized"
-    outputFolder = "C:\Users\Augus\Desktop\TesteDonwloader\Data\Historical\Indicators"
+    inputFolder = "../Report/Data/Historical/Quotes/Normalized"
+    outputFolder = "../Report/Data/Historical\Indicators"
     indicators = TechnicalIndicators()
     files = Util().GetFilesFromFolder(inputFolder,"csv")
     for file in files:

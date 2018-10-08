@@ -199,7 +199,7 @@ class StockHistoricalDataDownloader:
         return outputPath
 
     #Normalize prices to start from 1
-    def GetNormalizedDataframe(self,inputfolder,outputfolder):
+    def GetNormalizedDataframe(self,inputfolder,outputfolder,normalization='proportion'):
         outputPath = os.path.join(outputfolder,"Data/Historical/Quotes/Normalized")
         Util().CreateFolder(outputPath)
         files = Util().GetFilesFromFolder(inputfolder,'csv')
@@ -209,9 +209,15 @@ class StockHistoricalDataDownloader:
             dfHistorical = pd.read_csv(stockfile)
             if 'Date' in dfHistorical.columns:
                 print "Normalizing data from file {} ({} of {})".format(stockfile,count,total)
-                dfHistorical["Norm_High"] = dfHistorical["High"]/dfHistorical["High"][0]
-                dfHistorical["Norm_Low"] = dfHistorical["Low"]/dfHistorical["Low"][0]
-                dfHistorical["Norm_Adjusted_Close"] = dfHistorical["Adjusted_Close"]/dfHistorical["Adjusted_Close"][0]
+                if normalization =='proportion':
+                    dfHistorical["Norm_High"] = dfHistorical["High"]/dfHistorical["High"][0]
+                    dfHistorical["Norm_Low"] = dfHistorical["Low"]/dfHistorical["Low"][0]
+                    dfHistorical["Norm_Adjusted_Close"] = dfHistorical["Adjusted_Close"]/dfHistorical["Adjusted_Close"][0]
+                else:
+                    dfHistorical["Norm_High"] = np.log(dfHistorical["High"])
+                    dfHistorical["Norm_Low"] = np.log(dfHistorical["Low"])
+                    dfHistorical["Norm_Adjusted_Close"] = np.log(dfHistorical["Adjusted_Close"])
+
                 outputfileName = str(ntpath.basename(stockfile))
                 outputFile = os.path.join(outputPath,outputfileName)
                 dfHistorical.to_csv(outputFile,index=False)
